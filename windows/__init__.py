@@ -7,3 +7,4 @@ from .IdPassWindow import IdPassWindow
 from .PasswordForm import PasswordForm
 from .FaceForm import FaceForm
 from .InformationsForm import InformationsForm
+from .AdminForm import AdminForm

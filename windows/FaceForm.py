@@ -15,7 +15,9 @@ class FaceForm(QWidget, Ui_FaceForm):
         self.signals = Signals()
         self.imageUpdateThread = UpdateImageThread()
         self.imageUpdateThread.imageUpdate.connect(self.updateImage)
+        self.imageUpdateThread.cameraUnavailable.connect(self.onCameraUnavailable)
         self.takedFace = []
+        self.mode = mode
 
         if mode == 'checking':
             self.takeButton.setText('Check')
@@ -34,8 +36,10 @@ class FaceForm(QWidget, Ui_FaceForm):
         self.takedFace.append(b64Str)
         self.takedImageNumb += 1
         self.label_3.setText(str(self.takedImageNumb))
-        if self.takedImageNumb > 10:
+        if self.takedImageNumb >= 10:
             self.signals.takeFaceCompeleted.emit(self.takedFace)
+            self.imageUpdateThread.stop()
+            self.__loading()
 
     def _image2b64Str(self, image: numpy.ndarray) -> str:
         retval, buffer = cv2.imencode('.jpg', image)
@@ -50,6 +54,10 @@ class FaceForm(QWidget, Ui_FaceForm):
         self.imageUpdateThread.start()
         self.show()
     
+    def onCameraUnavailable(self):
+        self.__notifyUser(QMessageBox.Critical, "Camera Unavailable.")
+        self.close()
+
     def updateImage(self, pic: QtGui.QImage, image: numpy.ndarray):
         self.label.setPixmap(QtGui.QPixmap.fromImage(pic))
         self.currentImage = image
@@ -59,7 +67,8 @@ class FaceForm(QWidget, Ui_FaceForm):
         super().closeEvent(a0)
     
     def __loading(self):
-        self.label_2.setText('Checking ...')
+        if self.mode == 'checking':
+            self.label_2.setText('Checking ...')
         self.movie = QtGui.QMovie('/home/x6hdm/Code/client/resources/images/loading_3.gif')
         self.label_3.setMovie(self.movie)
         self.movie.start()
@@ -68,3 +77,9 @@ class FaceForm(QWidget, Ui_FaceForm):
         self.movie.stop()
         self.label_3.clear()
         self.label_2.clear()
+    
+    def __notifyUser(self, iconType: QMessageBox.Icon, message: str):
+        msgBox = QMessageBox()
+        msgBox.setIcon(iconType)
+        msgBox.setText(message)
+        return msgBox.exec_()

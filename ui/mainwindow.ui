@@ -39,15 +39,6 @@
        <enum>QFrame::Raised</enum>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_3">
-       <property name="leftMargin">
-        <number>50</number>
-       </property>
-       <property name="rightMargin">
-        <number>50</number>
-       </property>
-       <property name="bottomMargin">
-        <number>9</number>
-       </property>
        <item>
         <spacer name="verticalSpacer">
          <property name="orientation">
@@ -70,6 +61,12 @@
           <enum>QFrame::Raised</enum>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout">
+          <property name="leftMargin">
+           <number>30</number>
+          </property>
+          <property name="rightMargin">
+           <number>30</number>
+          </property>
           <item>
            <widget class="QFrame" name="frame_3">
             <property name="frameShape">
@@ -104,7 +101,7 @@
                </property>
                <property name="icon">
                 <iconset>
-                 <normaloff>:/icons/icons8-approved-unlock-48.png</normaloff>:/icons/icons8-approved-unlock-48.png</iconset>
+                 <normaloff>../resources/images/unlock_2.png</normaloff>../resources/images/unlock_2.png</iconset>
                </property>
                <property name="iconSize">
                 <size>
@@ -161,7 +158,7 @@
             </property>
             <property name="icon">
              <iconset>
-              <normaloff>:/icons/admin_2.png</normaloff>:/icons/admin_2.png</iconset>
+              <normaloff>../resources/images/admin_2.png</normaloff>../resources/images/admin_2.png</iconset>
             </property>
             <property name="iconSize">
              <size>
@@ -186,6 +183,75 @@
           </size>
          </property>
         </spacer>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_2">
+         <item>
+          <spacer name="horizontalSpacer">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton_2">
+           <property name="minimumSize">
+            <size>
+             <width>30</width>
+             <height>30</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>30</width>
+             <height>30</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Reset system&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset>
+             <normaloff>../resources/images/reset.png</normaloff>../resources/images/reset.png</iconset>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton">
+           <property name="minimumSize">
+            <size>
+             <width>30</width>
+             <height>30</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>30</width>
+             <height>30</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Setings&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset>
+             <normaloff>../resources/images/settings.png</normaloff>../resources/images/settings.png</iconset>
+           </property>
+          </widget>
+         </item>
+        </layout>
        </item>
       </layout>
      </widget>

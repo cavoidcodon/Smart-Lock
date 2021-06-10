@@ -36,3 +36,6 @@ class Signals(QObject):
 
     checkingNotExisted = pyqtSignal()
     update = pyqtSignal()
+
+    addAdminSuccessed = pyqtSignal()
+    addAdminFailed = pyqtSignal()
