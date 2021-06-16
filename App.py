@@ -6,9 +6,10 @@ from core.FaceRegSession import FaceRegSession
 from core.AdminSession import AdminSession
 from windows import MainWindow, AdminForm, FaceForm
 from PyQt5.QtWidgets import QApplication, QMessageBox
-import sys, requests
+import sys
 from core.ThreadWorker import ThreadWorker
 from core.UserManager import UserManager
+import Setings
 
 class System:
     def __init__(self):
@@ -196,6 +197,7 @@ class System:
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    Setings.initialize(sys.argv[1], sys.argv[2])
     system = System()
     system.start()
     sys.exit(app.exec_())

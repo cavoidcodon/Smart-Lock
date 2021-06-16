@@ -4,11 +4,11 @@ from .ThreadWorker import ThreadWorker
 from PIL import Image
 import io
 import requests
-import pandas as pd
+import Setings
 
 class LogManager:
     def __init__(self) -> None:
-        self.logUrl = 'http://localhost:5000/api/admin/log'
+        self.logUrl = "http://{}:{}/api/admin/log".format(Setings.ip_addr, Setings.port)
         self.dataFrame = None
         self.logList = []
         self.signals = Signals()

@@ -1,12 +1,12 @@
-import re
+import Setings
 from .Signals import Signals
 import requests
 from .ThreadWorker import ThreadWorker
 
 class UpdateManager:
     def __init__(self) -> None:
-        self.updateUrl = 'http://localhost:5000/api/update'
-        self.resetUrl = 'http://localhost:5000/api/reset'
+        self.updateUrl = f"http://{Setings.ip_addr}:{Setings.port}/api/update"
+        self.resetUrl = f"http://{Setings.ip_addr}:{Setings.port}/api/reset"
         self.signals = Signals()
 
     def reset(self, key: str):

@@ -1,17 +1,18 @@
-import json, io, cv2, numpy, pandas, requests, base64
+import json, io, numpy, pandas, requests, base64
 from requests.models import Response
 from core.Signals import Signals
 from PIL import Image
 from .ThreadWorker import ThreadWorker
+import Setings
 
 class UserManager:
     def __init__(self) -> None:
-        self.userDataUrl = 'http://localhost:5000/api/admin/userdata'
-        self.adminUrl = 'http://localhost:5000/api/admin'
-        self.checkingUrl = 'http://localhost:5000/api/checking'
-        self.faceRegUrl = 'http://localhost:5000/api/face-recognition'
-        self.idPassUrl = 'http://localhost:5000/api/idpassword'
-        self.loginAdminUrl = 'http://localhost:5000/api/admin/login'
+        self.userDataUrl = "http://{}:{}/api/admin/userdata".format(Setings.ip_addr, Setings.port)
+        self.adminUrl = "http://{}:{}/api/admin".format(Setings.ip_addr, Setings.port)
+        self.checkingUrl = "http://{}:{}/api/checking".format(Setings.ip_addr, Setings.port)
+        self.faceRegUrl = "http://{}:{}/api/face-recognition".format(Setings.ip_addr, Setings.port)
+        self.idPassUrl = "http://{}:{}/api/idpassword".format(Setings.ip_addr, Setings.port)
+        self.loginAdminUrl = "http://{}:{}/api/admin/login".format(Setings.ip_addr, Setings.port)
 
         self.userInforList = []
         self.dataFrame = None
