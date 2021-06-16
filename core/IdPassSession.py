@@ -1,19 +1,20 @@
 from core.LogInfor import LogInfor
 from PyQt5.QtWidgets import QMessageBox
-from .ThreadWorker import ThreadWorker
 from windows import IdPassWindow
 from .Session import Session
-import requests
 
 class IdPassSession(Session):
     def __init__(self) -> None:
         super().__init__()
 
         self.idPassWindow = IdPassWindow()
-        self.idPassUrl = 'http://localhost:5000/api/unlock/idpassword'
 
         self.idPassWindow.signals.closeWindow.connect(self.onCloseWindow)
         self.idPassWindow.signals.getIdPassCompleted.connect(self.onGetIdPassCompleted)
+
+        self.userManager.signals.verifySuccessed.connect(self.onVerifySuccessed)
+        self.userManager.signals.verifyFailed.connect(self.onVerifyFailed)
+        self.userManager.signals.verifyError.connect(self.onError)
 
 
 # Implement Session Interface
@@ -34,26 +35,14 @@ class IdPassSession(Session):
 
 
 # ==================================================================================================|
-# --------------------------------------------------------------------------------------------------|
 #   Begin: Handle signals of idPassWindow
-# --------------------------------------------------------------------------------------------------|
 # ==================================================================================================|
 
 
     # Handle getIdPassCompleted signal
-    # Get informations and send request to check
     # ======================================================================================
-    def onGetIdPassCompleted(self, userId, password):
-        # create a thread and send a request to server to check
-        # analysis result and emit signal to system
-        self.checkInforRequestThread = ThreadWorker(self.__checkInforRequest, userId, password)
-
-        self.checkInforRequestThread.successed.connect(self.onCheckInforRequestSuccessed)
-        self.checkInforRequestThread.httpError.connect(self.onHttpError)
-        self.checkInforRequestThread.connectionError.connect(self.onConnectionError)
-        self.checkInforRequestThread.requestError.connect(self.onConnectionError)
-
-        self.checkInforRequestThread.start()
+    def onGetIdPassCompleted(self, infor):
+        self.userManager.verify(mode="idpass", infor=infor)
 
     # Handle close window signal from idPasswindow
     # Emit sessionDone signal to system
@@ -63,9 +52,7 @@ class IdPassSession(Session):
 
 
 # ==================================================================================================|
-# --------------------------------------------------------------------------------------------------|
 #   End: Handle signals of idPassWindow
-# --------------------------------------------------------------------------------------------------|
 # ==================================================================================================|
 
 
@@ -73,62 +60,47 @@ class IdPassSession(Session):
 
 
 # ==================================================================================================|
-# --------------------------------------------------------------------------------------------------|
-# Begin: Handle signals of checkInforRequestThread
-# --------------------------------------------------------------------------------------------------|
+# Begin: Handle signals of userManager.verify()
 # ==================================================================================================|
 
 
-    # Handle request successed signal from checkInforRequestThread
+    # Handle verify successed
     # ======================================================================================
-    def onCheckInforRequestSuccessed(self, respone, status):
+    def onVerifySuccessed(self, result):
         self.idPassWindow.hide()
-        
-        if status == 200:
-            if respone['existed'] and respone['status'] == 'Correct':
-                self.__notifyUser(QMessageBox.Information, f"Welcome {respone['label']}.")
-                logInfor = LogInfor(mode='IdPass-Unlock', isValid='Valid', userId=respone['label'])
-                self.logManager.writeLog(logInfor)
-                # unlock
-                self.idPassWindow.close()
-            else:
-                self.invalidCount += 1
-                if self.invalidCount >= self.MAX_ALLOWED_TIMES:
-                    self.__notifyUser(QMessageBox.Critical, "You have unlocked more times than allowed!")
-                    logInfor = LogInfor(mode='IdPass-Unlock', isValid='Invalid', userId=respone['label'])
-                    self.logManager.writeLog(logInfor)
-                    self.signals.penalty.emit()   
-                    self.idPassWindow.close()            
-                else:
-                    if respone['existed'] and respone['status'] == 'Password Incorrect':
-                        ret = self.__notifyUser(QMessageBox.Critical, "Password Incorrect, try again?", \
-                            QMessageBox.Ok | QMessageBox.Cancel)
-                    else:
-                        ret = self.__notifyUser(QMessageBox.Critical, "UserId Incorrect, try agian?", \
-                            QMessageBox.Ok | QMessageBox.Cancel)
-                    
-                    if ret == QMessageBox.Ok:
-                        self.restart()
-                    else:
-                        self.idPassWindow.close()
-
-    # Handle connection error when sending request
-    # ======================================================================================
-    def onConnectionError(self, str):
-        self.__notifyUser(QMessageBox.Critical, f"{str}")
+        self.__notifyUser(QMessageBox.Information, "Welcome {}".format(result['label']))
+        logInfor = LogInfor(mode='ID-Unlock', isValid='Valid', userId=result['label'])
+        self.logManager.writeLog(logInfor)
+        # unlock raspberry pi api
         self.idPassWindow.close()
-
-    # Handle Http error when sending request
+    
+    # Handle verify failed
     # ======================================================================================
-    def onHttpError(self, tupleVal):
-        self.__notifyUser(QMessageBox.Critical, f"An error occurred: {tupleVal[0]}, {tupleVal[1]}")
+    def onVerifyFailed(self, status):
+        self.invalidCount += 1
+        if self.invalidCount >= self.MAX_ALLOWED_TIMES:
+            self.__notifyUser(QMessageBox.Critical, "You have unlocked more times than allowed!")
+            logInfor = LogInfor(mode='ID-Unlock', isValid='Invalid', userId="Unknown")
+            self.logManager.writeLog(logInfor)
+            self.idPassWindow.close()
+            self.signals.penalty.emit()
+        else:
+            retVal = self.__notifyUser(QMessageBox.Critical, f"Unlock failed, try again ?\nStatus: {status}", \
+                QMessageBox.Ok | QMessageBox.Cancel)
+            if retVal == QMessageBox.Ok:
+                self.restart()
+            else:
+                self.idPassWindow.close()
+
+    # Handle error
+    # ======================================================================================
+    def onError(self):
+        self.__notifyUser(QMessageBox.Critical, "An error occured.")
         self.idPassWindow.close()
 
 
 # ==================================================================================================|
-# --------------------------------------------------------------------------------------------------|
-# End: Handle signals of checkFaceRequestThread
-# --------------------------------------------------------------------------------------------------|
+# End: Handle signals of userManager.verify()
 # ==================================================================================================|
 
 
@@ -145,18 +117,6 @@ class IdPassSession(Session):
         msgBox.setStandardButtons(buttons)
         return msgBox.exec_()
 
-    # Function for check user informations request
-    # ======================================================================================
-    def __checkInforRequest(self, id, pwd):
-        infor = {
-            'user_id': id,
-            'password': pwd
-        }
-
-        respone = requests.post(self.idPassUrl, params=infor)
-        respone.raise_for_status()
-
-        return respone
 # =================================================================================================
 # #################################################################################################
 # =================================================================================================

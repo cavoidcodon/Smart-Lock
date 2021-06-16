@@ -1,10 +1,9 @@
-import cv2
+import cv2, numpy, base64
 from core.Signals import Signals
 from PyQt5 import QtGui
-from PyQt5.QtWidgets import QMessageBox, QWidget
+from PyQt5.QtWidgets import QWidget
 from ui import Ui_FaceForm
 from .FaceRegWindow import UpdateImageThread
-import re, numpy, base64
 
 class FaceForm(QWidget, Ui_FaceForm):
     def __init__(self, mode):
@@ -15,7 +14,7 @@ class FaceForm(QWidget, Ui_FaceForm):
         self.signals = Signals()
         self.imageUpdateThread = UpdateImageThread()
         self.imageUpdateThread.imageUpdate.connect(self.updateImage)
-        self.imageUpdateThread.cameraUnavailable.connect(self.onCameraUnavailable)
+        self.imageUpdateThread.cameraUnavailable.connect(lambda : self.signals.cameraUnavailable.emit())
         self.takedFace = []
         self.mode = mode
 
@@ -24,7 +23,7 @@ class FaceForm(QWidget, Ui_FaceForm):
             self.takeButton.clicked.connect(self.onCheckFaceImage)
         else:
             self.takeButton.setText('Take')
-            self.label_2.setText("At least 10 face images: ")
+            self.label_2.setText("At least 20 face images: ")
             self.takedImageNumb = 0
             self.label_3.setText(str(self.takedImageNumb))
             self.takeButton.clicked.connect(self.onTakeFaceImage)
@@ -36,7 +35,7 @@ class FaceForm(QWidget, Ui_FaceForm):
         self.takedFace.append(b64Str)
         self.takedImageNumb += 1
         self.label_3.setText(str(self.takedImageNumb))
-        if self.takedImageNumb >= 10:
+        if self.takedImageNumb >= 20:
             self.signals.takeFaceCompeleted.emit(self.takedFace)
             self.imageUpdateThread.stop()
             self.__loading()
@@ -53,10 +52,6 @@ class FaceForm(QWidget, Ui_FaceForm):
     def start(self):
         self.imageUpdateThread.start()
         self.show()
-    
-    def onCameraUnavailable(self):
-        self.__notifyUser(QMessageBox.Critical, "Camera Unavailable.")
-        self.close()
 
     def updateImage(self, pic: QtGui.QImage, image: numpy.ndarray):
         self.label.setPixmap(QtGui.QPixmap.fromImage(pic))
@@ -72,14 +67,3 @@ class FaceForm(QWidget, Ui_FaceForm):
         self.movie = QtGui.QMovie('/home/x6hdm/Code/client/resources/images/loading_3.gif')
         self.label_3.setMovie(self.movie)
         self.movie.start()
-
-    def __stopLoading(self):
-        self.movie.stop()
-        self.label_3.clear()
-        self.label_2.clear()
-    
-    def __notifyUser(self, iconType: QMessageBox.Icon, message: str):
-        msgBox = QMessageBox()
-        msgBox.setIcon(iconType)
-        msgBox.setText(message)
-        return msgBox.exec_()

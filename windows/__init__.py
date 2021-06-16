@@ -8,3 +8,5 @@ from .PasswordForm import PasswordForm
 from .FaceForm import FaceForm
 from .InformationsForm import InformationsForm
 from .AdminForm import AdminForm
+from .StatusForm import StatusForm
+from .SecretKeyForm import SecretKeyForm

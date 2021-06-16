@@ -1,4 +1,7 @@
 from datetime import datetime
+
+from PyQt5 import QtWidgets
+from windows.StatusDialog import StatusDialog
 from windows.DetailsDialog import DetailsDialog
 from windows.InformationsForm import InformationsForm
 from windows.FaceForm import FaceForm
@@ -15,13 +18,14 @@ import pandas, base64, numpy, cv2, io
 from PIL import Image
 
 class AdminWindow(QMainWindow, Ui_AdminWindow):
-    def __init__(self, users, logs):
+    def __init__(self, users, logs, updateLogs):
         super(AdminWindow, self).__init__()
         self.setupUi(self)
 
         self.signals = Signals()
         self.users = users
         self.logs = logs
+        self.updateLogs = updateLogs
 
         self.logInforTableView.setModel(DataModel(self.__constructLogsDataFrame(self.logs)))
 
@@ -34,6 +38,8 @@ class AdminWindow(QMainWindow, Ui_AdminWindow):
         self.logSelectionModel = self.logInforTableView.selectionModel()
         self.logSelectionModel.selectionChanged.connect(self.onLogsSelectionChanged)
 
+        self.updateHistoryTableView.setModel(DataModel(self.__constructUpdateLogsDataFrame(self.updateLogs)))
+
         # Admin window signal
         self.delUserButton.clicked.connect(self.onDeleteUser)
         self.changeInforButton.clicked.connect(self.onChangeUserInfor)
@@ -41,6 +47,7 @@ class AdminWindow(QMainWindow, Ui_AdminWindow):
         self.pushButton.clicked.connect(self.onShowLog)
         self.queryButton.clicked.connect(self.onQuery)
         self.updateButton.clicked.connect(self.onUpdate)
+        self.checkUpdateButton.clicked.connect(self.onCheckUpdate)
 
 # Close event
 # =============================================================================================
@@ -99,33 +106,37 @@ class AdminWindow(QMainWindow, Ui_AdminWindow):
         ret = self.__notifyUser(QMessageBox.Warning, f"Do you want to delete {userId}", QMessageBox.Ok | QMessageBox.Cancel)
         if ret == QMessageBox.Ok:
             self.setEnabled(False)
-            self.delUserButton.setText('Deleting...')        
-            row = self.selectedIndexs[0].row()
-            self.signals.deleteUser.emit(userId, row)
+            self.delUserButton.setText('Deleting...')
+            self.signals.deleteUser.emit(userId)
         else: 
             return
 
     # Slot for delUserSuccessed signal
     # =========================================================================================
-    def onDelUserSuccessed(self, row):
+    def onDelUserSuccessed(self):
         self.delUserButton.setText('Delete')
         delId = self.userDataModel.data(self.selectedIndexs[0], Qt.DisplayRole)
-        self.setEnabled(True)
 
         for user in self.users:
             if user.get('userId') == delId:
                 self.users.remove(user)
-
+        
+        self.userDataModel.removeRows(self.selectedIndexs[0].row(), 1, QModelIndex())
         self.userListTableView.selectRow(0)
-        self.userDataModel.removeRows(row, 1, QModelIndex())
-        self.__notifyUser(QMessageBox.Information, "Delete user successful")
+        self.setEnabled(True)
+        self.__notifyUser(QMessageBox.Information, "Delete user successful.")
 
     # Slot for delUserFailed signal
     # =========================================================================================   
     def onDelUserFailed(self):
         self.delUserButton.setText('Delete')
         self.setEnabled(True)
-        self.__notifyUser(QMessageBox.Information, "Delete user failed")
+        self.__notifyUser(QMessageBox.Critical, "Delete user failed.")
+    
+    def onDelUserError(self):
+        self.delUserButton.setText('Delete')
+        self.setEnabled(True)
+        self.__notifyUser(QMessageBox.Critical, "An error occurred.")
 
 # ==============================================================================================
 # ==============================================================================================
@@ -148,12 +159,15 @@ class AdminWindow(QMainWindow, Ui_AdminWindow):
         self.changeInforForm = ChangeInforForm(userId, role)
         self.changeInforForm.show()
         self.changeInforForm.signals.closeWindow.connect(lambda: self.setEnabled(True))
-        self.changeInforForm.signals.changeUserInfor.connect(lambda infor: self.signals.changeUserInfor.emit(infor))
+        self.changeInforForm.signals.getChangeInforCompleted.connect(self.onGetChangeInforCompleted)
     
+    def onGetChangeInforCompleted(self, infor):
+        self.changeInfor = infor
+        self.signals.changeUserInfor.emit(infor)
 
-    def onChangeUserInforSuccessed(self, infor):
+    def onChangeUserInforSuccessed(self):
         self.changeInforForm.close()
-        role = infor[2]
+        role = self.changeInfor[2]
         if role == 'Admin' and self.userDataModel.data(self.selectedIndexs[3], Qt.DisplayRole) == 'Normal':
             self.__notifyUser(QMessageBox.Information, "Admin is changed, system will logout!")
             self.close()
@@ -163,8 +177,6 @@ class AdminWindow(QMainWindow, Ui_AdminWindow):
     def onChangeUserInforFailed(self):
         self.changeInforForm.close()
         self.__notifyUser(QMessageBox.Information, "Change user's infor failed")
-
-
 # ==============================================================================================
 # ==============================================================================================
 
@@ -187,6 +199,11 @@ class AdminWindow(QMainWindow, Ui_AdminWindow):
 
     def onCheckFaceSuccessed(self):
         self.faceForm.close()
+        self.__notifyUser(QMessageBox.Critical, "Can not add user.")
+        self.setEnabled(True)       
+    
+    def onCheckFaceFailed(self):
+        self.faceForm.close()
 
         userIdList = []
         for user in self.users:
@@ -196,10 +213,10 @@ class AdminWindow(QMainWindow, Ui_AdminWindow):
         self.informationsForm.signals.takeInformationsCompleted.connect(self.onTakeInformationsCompleted)
         self.informationsForm.show()
     
-    def onCheckFaceFailed(self):
+    def onCheckFaceError(self):
         self.faceForm.close()
-        self.__notifyUser(QMessageBox.Critical, "Can not add user.")
-        self.setEnabled(True)
+        self.__notifyUser(QMessageBox.Critical, "An error occurred.")
+        self.setEnabled(True) 
 
     def onTakeInformationsCompleted(self, infor: object):
         self.informationsForm.close()
@@ -209,19 +226,20 @@ class AdminWindow(QMainWindow, Ui_AdminWindow):
         self.takingFaceForm.start()
 
     def onTakeFaceCompleted(self, faceList):
+        self.addingFace = faceList[0]
         self.takingFaceForm.setEnabled(False)
         self.signals.addUser.emit(self.addingUserInfor, faceList)
     
-    def onAddUserSuccessed(self, infor, imgb64Str):
+    def onAddUserSuccessed(self):
         self.takingFaceForm.close()
         self.setEnabled(True)
         self.userListTableView.selectRow(0)
         newUser = {
-            'userId': infor['userId'],
-            'name': infor['name'],
+            'userId': self.addingUserInfor['userId'],
+            'name': self.addingUserInfor['name'],
             'enrollDate': datetime.today(),
             'role': 'Normal',
-            'faceBase64': imgb64Str
+            'faceBase64': self.addingFace
         }
 
         self.users.append(newUser)
@@ -250,8 +268,6 @@ class AdminWindow(QMainWindow, Ui_AdminWindow):
 # =============================================================================================
 # Handle show log
 # =============================================================================================
-
-
     def onShowLog(self):
         if len(self.logSelectedIndexes) == 0:
             return
@@ -293,14 +309,51 @@ class AdminWindow(QMainWindow, Ui_AdminWindow):
     
     def onQueryLogFailed(self):
         self.__notifyUser(QMessageBox.Critical, "An error occured.")
-
-
 # ==============================================================================================
 # ==============================================================================================
 
 
+# =============================================================================================
+# Handle update
+# =============================================================================================
     def onUpdate(self):
-        self.signals.update.emit()
+        retVal = self.__notifyUser(QMessageBox.Warning, "Updates may cause the system to slowdown "\
+            "during the update time. Do you want to continue?", QMessageBox.Cancel | QMessageBox.Ok)
+        
+        if retVal == QMessageBox.Ok:
+            self.updateButton.setText("Updating...")
+            self.updateButton.setEnabled(False)
+            self.signals.update.emit()
+    
+    def onUpdateSuccessed(self):
+        self.updateButton.setText("Update")
+        self.updateButton.setEnabled(True)
+        self.__notifyUser(QMessageBox.Information, "Update Successfull.")
+    
+    def onUpdateFailed(self):
+        self.updateButton.setText("Update")
+        self.updateButton.setEnabled(True)
+        self.__notifyUser(QMessageBox.Critical, "Update Failed.")
+    
+    def onUpdateError(self):
+        self.updateButton.setText("Update")
+        self.updateButton.setEnabled(True)
+        self.__notifyUser(QMessageBox.Critical, "An error occurred.")
+    
+    def onCheckUpdate(self):
+        self.checkUpdateButton.setText("Checking ...")
+        self.signals.checkUpdate.emit()
+
+    def onCheckUpdateSuccessed(self, resp):
+        self.checkUpdateButton.setText("Check Update")
+        self.statusDialog = StatusDialog(resp['isNeedUpdate'], resp['status'])
+        self.statusDialog.show()
+    
+    def onCheckUpdateError(self):
+        self.checkUpdateButton.setText("Check Update")
+        self.__notifyUser(QMessageBox.Critical, "An error occurred.")
+# ============================================================================================
+# ============================================================================================
 
 
 # Private function
@@ -320,6 +373,13 @@ class AdminWindow(QMainWindow, Ui_AdminWindow):
             dataList.append(rowData)
         return pandas.DataFrame(dataList, columns=['Mode', 'User ID', 'Time', 'Status'])
     
+    def __constructUpdateLogsDataFrame(self, logs):
+        dataList = []
+        for log in logs:
+            rowData = [log['timeStart'], log['timeEnd'], log['status']]
+            dataList.append(rowData)
+        return pandas.DataFrame(dataList, columns=['Start', 'End', 'Status'])
+    
     def __constructUserDataFrame(self, users):
         dataList = []
         for user in users:
@@ -334,5 +394,5 @@ class AdminWindow(QMainWindow, Ui_AdminWindow):
         height, width, channel = cv2Image.shape
         bytesPerLine = 3 * width
         return QtGui.QImage(cv2Image.data, width, height, bytesPerLine, QtGui.QImage.Format_BGR888)
-    # ===============================================================
+# ===============================================================
     

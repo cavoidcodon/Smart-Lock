@@ -1,24 +1,24 @@
 from PyQt5.QtWidgets import QMessageBox
-from requests.models import Response
-from .ThreadWorker import ThreadWorker
 from .Session import Session
 from windows import FaceRegWindow
-from PIL import Image
-from PIL.Image import fromarray
-import requests, io, numpy
 from .LogInfor import LogInfor
 
 class FaceRegSession(Session):
 
     def __init__(self) -> None:
         super().__init__()
-        self.faceRegUrl = 'http://localhost:5000/api/unlock/face-recognition'
+
         self.faceRegWindow = FaceRegWindow(timeout=5)
         self.faceImage = None
 
         self.faceRegWindow.signals.cameraUnavailable.connect(self.onCameraUnavailable)
         self.faceRegWindow.signals.getFaceCompeleted.connect(self.onGetFaceCompleted)
         self.faceRegWindow.signals.closeWindow.connect(self.onCloseWindow)
+
+        self.userManager.signals.verifySuccessed.connect(self.onVerifySuccessed)
+        self.userManager.signals.verifyFailed.connect(self.onVerifyFailed)
+        self.userManager.signals.noFaceDectect.connect(self.onNoFaceDetect)
+        self.userManager.signals.verifyError.connect(self.onError)
 
 
 
@@ -40,9 +40,7 @@ class FaceRegSession(Session):
 
 
 # ==================================================================================================|
-# --------------------------------------------------------------------------------------------------|
 #   Begin: Handle signals of faceRegWindow
-# --------------------------------------------------------------------------------------------------|
 # ==================================================================================================|
 
 
@@ -53,20 +51,11 @@ class FaceRegSession(Session):
         self.faceRegWindow.close()
 
     # Handle getFaceCompleted signal from faceRegWindow
-    # Get face image and request to check
     # ======================================================================================
     def onGetFaceCompleted(self, face):
-        # Save face image for write log
         self.faceImage = face
-
-        self.checkFaceRequestThread = ThreadWorker(self.__checkFaceRequest, face)
-
-        self.checkFaceRequestThread.successed.connect(self.onCheckFaceRequestSuccessed)
-        self.checkFaceRequestThread.httpError.connect(self.onHttpError)
-        self.checkFaceRequestThread.connectionError.connect(self.onConnectionError)
-        self.checkFaceRequestThread.requestError.connect(self.onConnectionError)
-
-        self.checkFaceRequestThread.start()
+        self.userManager.verify(mode='face-regconition', faceImage=self.faceImage)
+        
 
     # Handle close window signal from faceRegWindow
     # Emit sessionDone signal to system
@@ -76,9 +65,7 @@ class FaceRegSession(Session):
 
 
 # ==================================================================================================|
-# --------------------------------------------------------------------------------------------------|
 #   End: Handle signals of faceRegWindow
-# --------------------------------------------------------------------------------------------------|
 # ==================================================================================================|
 
 
@@ -86,58 +73,53 @@ class FaceRegSession(Session):
 
 
 # ==================================================================================================|
-# --------------------------------------------------------------------------------------------------|
-# Begin: Handle signals of checkFaceRequestThread
-# --------------------------------------------------------------------------------------------------|
+# Begin: Handle signals of userManager.verify()
 # ==================================================================================================|
 
 
-    # Handle request successed signal from checkFaceRequestThread
+    # Handle verify successed
     # ======================================================================================
-    def onCheckFaceRequestSuccessed(self, result, status):
+    def onVerifySuccessed(self, result):
         self.faceRegWindow.hide()
-        if status == 200:
-            if result['existed']:
-                self.__notifyUser(QMessageBox.Information, "Welcome {}".format(result['label']))
-                logInfor = LogInfor(mode='Face-Unlock', isValid='Valid', image=self.faceImage, userId=result['label'])
-                self.logManager.writeLog(logInfor)
-                # unlock raspberry pi api
-                self.faceRegWindow.close()
-            elif result['status'] == 'No Face':
-                self.__notifyUser(QMessageBox.Critical, "No face detected !")
-                self.faceRegWindow.close()
-            else:
-                self.invalidCount += 1
-                if self.invalidCount >= self.MAX_ALLOWED_TIMES:
-                    self.__notifyUser(QMessageBox.Critical, "You have unlocked more times than allowed!")
-                    logInfor = LogInfor(mode='Face-Unlock', isValid='Invalid', image=self.faceImage, userId=result['label'])
-                    self.logManager.writeLog(logInfor)
-                    self.faceRegWindow.close()
-                    self.signals.penalty.emit()
-                else:
-                    retVal = self.__notifyUser(QMessageBox.Critical, "Unlock failed, try again ?", QMessageBox.Ok | QMessageBox.Cancel)
-                    if retVal == QMessageBox.Ok:
-                        self.restart()
-                    else:
-                        self.faceRegWindow.close()
-    
-    # Handle connection error when sending request
-    # ======================================================================================
-    def onConnectionError(self, str):
-        self.__notifyUser(QMessageBox.Critical, f"{str}")
+        self.__notifyUser(QMessageBox.Information, "Welcome {}".format(result['label']))
+        logInfor = LogInfor(mode='Face-Unlock', isValid='Valid', image=self.faceImage, userId=result['label'])
+        self.logManager.writeLog(logInfor)
+        # unlock raspberry pi api
         self.faceRegWindow.close()
-
-    # Handle Http error when sending request
+    
+    # Handle no face detect
     # ======================================================================================
-    def onHttpError(self, tupleVal):
-        self.__notifyUser(QMessageBox.Critical, f"An error occurred: {tupleVal[0]}, {tupleVal[1]}")
+    def onNoFaceDetect(self):
+        self.__notifyUser(QMessageBox.Critical, "No face detected !")
+        self.faceRegWindow.close()
+    
+    # Handle verify failed
+    # ======================================================================================
+    def onVerifyFailed(self, status):
+        self.invalidCount += 1
+        if self.invalidCount >= self.MAX_ALLOWED_TIMES:
+            self.__notifyUser(QMessageBox.Critical, "You have unlocked more times than allowed!")
+            logInfor = LogInfor(mode='Face-Unlock', isValid='Invalid', image=self.faceImage, userId="Unknown")
+            self.logManager.writeLog(logInfor)
+            self.faceRegWindow.close()
+            self.signals.penalty.emit()
+        else:
+            retVal = self.__notifyUser(QMessageBox.Critical, f"Unlock failed, try again ?\nStatus: {status}", \
+                QMessageBox.Ok | QMessageBox.Cancel)
+            if retVal == QMessageBox.Ok:
+                self.restart()
+            else:
+                self.faceRegWindow.close()
+
+    # Handle error
+    # ====================================================================================== 
+    def onError(self):
+        self.__notifyUser(QMessageBox.Critical, "An error occured.")
         self.faceRegWindow.close()
 
 
 # ==================================================================================================|
-# --------------------------------------------------------------------------------------------------|
-# End: Handle signals of checkFaceRequestThread
-# --------------------------------------------------------------------------------------------------|
+# End: Handle signals of userManager.verify()
 # ==================================================================================================|
     
 
@@ -154,19 +136,6 @@ class FaceRegSession(Session):
         msgBox.setStandardButtons(buttons)
         return msgBox.exec_()
 
-    # Function for check face request
-    # ======================================================================================
-    def __checkFaceRequest(self, faceImage: numpy.ndarray) -> Response:
-        image = Image.fromarray(faceImage)
-        buff = io.BytesIO()
-        image.save(buff, format='JPEG')
-        bytesImage = buff.getvalue()
-        
-        obj = {'image': bytesImage}
-        resp = requests.post(self.faceRegUrl, files = obj)
-        resp.raise_for_status()
-
-        return resp
 # =================================================================================================
 # #################################################################################################
 # =================================================================================================

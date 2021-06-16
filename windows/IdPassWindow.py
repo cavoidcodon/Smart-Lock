@@ -57,7 +57,11 @@ class IdPassWindow(QMainWindow, Ui_IdPassWindow):
 
         self.sendButton.setEnabled(False)
         self.cancelButton.setEnabled(False)
-        self.signals.getIdPassCompleted.emit(userId, password)
+        infor = {
+            "user_id": userId,
+            "password": password
+        }
+        self.signals.getIdPassCompleted.emit(infor)
         self.__loading()
 
     # Handle close signal

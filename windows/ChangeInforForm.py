@@ -47,7 +47,7 @@ class ChangeInforForm(QWidget, Ui_ChangeInforForm):
                     "to 'Normal'. Do you want to continue?", QMessageBox.Ok | QMessageBox.Cancel)
                 
                 if ret == QMessageBox.Ok:
-                    self.signals.changeUserInfor.emit((self.userId, password, role))
+                    self.signals.getChangeInforCompleted.emit((self.userId, password, role))
                     return
                 else:
                     return
@@ -66,11 +66,12 @@ class ChangeInforForm(QWidget, Ui_ChangeInforForm):
                     "to 'Normal'. Do you want to continue?", QMessageBox.Ok | QMessageBox.Cancel)
                 
                 if ret == QMessageBox.Ok:
-                    self.signals.changeUserInfor.emit((self.userId, password, role))
+                    self.signals.getChangeInforCompleted.emit((self.userId, password, role))
                     return
                 else:
                     return
-        self.signals.changeUserInfor.emit((self.userId, password, role))
+        self.signals.getChangeInforCompleted.emit((self.userId, password, role))
+        self.__loading()
 
     # Private function
     # ===================================================================================

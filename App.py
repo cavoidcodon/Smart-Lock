@@ -1,7 +1,9 @@
+from core.UpdateManager import UpdateManager
+from windows.SecretKeyForm import SecretKeyForm
 from core.IdPassSession import IdPassSession
 from PyQt5.QtCore import QTimer
 from core.FaceRegSession import FaceRegSession
-from core.AdminLoginSession import AdminLoginSession
+from core.AdminSession import AdminSession
 from windows import MainWindow, AdminForm, FaceForm
 from PyQt5.QtWidgets import QApplication, QMessageBox
 import sys, requests
@@ -12,10 +14,15 @@ class System:
     def __init__(self):
         # Main window
         self.mainWindow = MainWindow()
-        self.checkingUrl = 'http://localhost:5000/api/checking'
 
         # For penalty time
         self.userManager = UserManager()
+        self.userManager.signals.notEmpty.connect(self.onSystemNotEmpty)
+        self.userManager.signals.empty.connect(self.onSystemEmpty)
+        self.userManager.signals.checkError.connect(self.onError)
+        self.updateManager = UpdateManager()
+        self.updateManager.signals.resetSuccessed.connect(self.onResetSuccessed)
+        self.updateManager.signals.resetError.connect(self.onResetError)
         self.isPenalty = False
         self.penaltyTimer = QTimer()
         self.penaltyTimer.setInterval(60000) # 1 minutes
@@ -25,29 +32,21 @@ class System:
 # ======================================================================================
 # ======================================================================================
     def start(self):
-        self.checkingThread = ThreadWorker(self.__checkingRequest)
-        self.checkingThread.successed.connect(self.onCheckingSuccessed)
-        self.checkingThread.httpError.connect(self.onCheckingFailed)
-        self.checkingThread.connectionError.connect(self.onCheckingFailed)
-        self.checkingThread.requestError.connect(self.onCheckingFailed)
-        self.checkingThread.start()
+        self.userManager.checkSystem()
     
-    def onCheckingSuccessed(self, resp, status):
-        if status == 200 and resp['isEmpty']:
-            self.mainWindow.unlockButton.clicked.connect(self.onBegin)
-            self.mainWindow.loginAdminButton.clicked.connect(self.onBegin)
-            self.mainWindow.show()
-        elif not resp['isEmpty']:
-            self.mainWindow.unlockButton.clicked.connect(self.onUnlock)
-            self.mainWindow.loginAdminButton.clicked.connect(self.onLogin)
-            self.mainWindow.pushButton_2.clicked.connect(self.onReset)
-            self.mainWindow.show()
-        else:
-            self.__notifyUser(QMessageBox.Critical, "An error occurred.")
-            self.mainWindow.close()
+    def onSystemNotEmpty(self):
+        self.mainWindow.unlockButton.clicked.connect(self.onUnlock)
+        self.mainWindow.loginAdminButton.clicked.connect(self.onLogin)
+        self.mainWindow.pushButton_2.clicked.connect(self.onReset)
+        self.mainWindow.show()
+
+    def onSystemEmpty(self):
+        self.mainWindow.unlockButton.clicked.connect(self.onBegin)
+        self.mainWindow.loginAdminButton.clicked.connect(self.onBegin)
+        self.mainWindow.show()
     
-    def onCheckingFailed(self, val):
-        self.__notifyUser(QMessageBox.Critical, "An error occured. Please check server ip address.")
+    def onError(self):
+        self.__notifyUser(QMessageBox.Critical, "An error occurred.")
         self.mainWindow.close()
 
 # ======================================================================================
@@ -57,7 +56,21 @@ class System:
 # ======================================================================================
 # ======================================================================================    
     def onReset(self):
-        pass
+        self.secretKeyForm = SecretKeyForm()
+        self.secretKeyForm.signals.resetSystem.connect(self.updateManager.reset)
+        self.secretKeyForm.show()
+    
+    def onResetSuccessed(self):
+        self.secretKeyForm.close()
+        self.__notifyUser(QMessageBox.Information, "Reset successed.")
+        self.mainWindow.unlockButton.clicked.disconnect()
+        self.mainWindow.loginAdminButton.clicked.disconnect()
+        self.mainWindow.pushButton_2.clicked.disconnect()
+        self.start()
+    
+    def onResetError(self):
+        self.secretKeyForm.close()
+        self.__notifyUser(QMessageBox.Critical, "Reset Error.")
 
 # ======================================================================================
 # ======================================================================================
@@ -67,7 +80,8 @@ class System:
 # ======================================================================================
 # ======================================================================================
     def onBegin(self):
-        retVal = self.__notifyUser(QMessageBox.Information, "You must add first user. By default, first user is Admin.")
+        retVal = self.__notifyUser(QMessageBox.Information, \
+            "You must add first user. By default, first user is Admin.", QMessageBox.Ok | QMessageBox.Cancel)
         if retVal == QMessageBox.Ok:
             self.mainWindow.setEnabled(False)
             self.adminForm = AdminForm()
@@ -78,8 +92,14 @@ class System:
         self.adminForm.close()
         self.addingAdminInfor = infor
         self.faceForm = FaceForm(mode='taking')
+        self.faceForm.signals.cameraUnavailable.connect(self.onCameraUnavailable)
         self.faceForm.signals.takeFaceCompeleted.connect(self.onTakeFaceCompleted)
         self.faceForm.start()
+    
+    def onCameraUnavailable(self):
+        self.__notifyUser(QMessageBox.Critical, "Camera unavailable.")
+        self.faceForm.close()
+        self.mainWindow.setEnabled(True)
 
     def onTakeFaceCompleted(self, faces):
         self.addingAdminFaces = faces
@@ -96,6 +116,8 @@ class System:
         self.__notifyUser(QMessageBox.Information, "Add admin successful.")
         self.faceForm.close()
         self.mainWindow.setEnabled(True)
+        self.mainWindow.unlockButton.clicked.disconnect()
+        self.mainWindow.loginAdminButton.clicked.disconnect()
         self.mainWindow.unlockButton.clicked.connect(self.onUnlock)
         self.mainWindow.loginAdminButton.clicked.connect(self.onLogin)
         self.mainWindow.pushButton_2.clicked.connect(self.onReset)
@@ -133,7 +155,7 @@ class System:
             return
 
         self.mainWindow.setEnabled(False)
-        self.session = AdminLoginSession()
+        self.session = AdminSession()
         self.session.signals.sessionDone.connect(self.onSessionDone)
         self.session.signals.penalty.connect(self.onPenalty)
         self.session.start()
@@ -163,17 +185,12 @@ class System:
 # Private function
 # ======================================================================================
     # Notify user with message box
-    def __notifyUser(self, iconType: QMessageBox.Icon, message: str):
+    def __notifyUser(self, iconType: QMessageBox.Icon, message: str, buttons: QMessageBox.StandardButton=QMessageBox.Ok):
         msgBox = QMessageBox()
         msgBox.setIcon(iconType)
         msgBox.setText(message)
+        msgBox.setStandardButtons(buttons)
         return msgBox.exec_()
-    
-    def __checkingRequest(self):
-        response = requests.get(self.checkingUrl)
-        response.raise_for_status()
-
-        return response
 
 # ======================================================================================
 

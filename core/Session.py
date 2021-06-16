@@ -1,3 +1,4 @@
+from core.UserManager import UserManager
 from core.LogManager import LogManager
 from core.LogInfor import LogInfor
 from .Signals import Signals
@@ -8,6 +9,7 @@ class Session:
         self.MAX_ALLOWED_TIMES = 3
         self.signals = Signals()
         self.logManager = LogManager()
+        self.userManager = UserManager()
 
     def start(self):
         pass
